@@ -1,0 +1,403 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:transparent;font-size:13px}
+  #app{display:flex;flex-direction:column;background:#e4e6ea;border:1px solid #d0d3d8;border-radius:10px;overflow:hidden}
+  #tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:#f6f7f9;border-bottom:1px solid #d0d3d8}
+  #tools .sep{width:1px;height:22px;background:#cfd2d8;margin:0 4px}
+  #tools button{border:1px solid #c5c8ce;background:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:13px;min-width:30px}
+  #tools button:hover{background:#eef2ff}
+  #tools button.danger:hover{background:#fee2e2}
+  #tools input[type=number]{width:54px;padding:3px;border:1px solid #c5c8ce;border-radius:6px}
+  #tools input[type=color]{width:30px;height:28px;padding:0;border:1px solid #c5c8ce;border-radius:6px;background:#fff}
+  #tools .lbl{font-size:11px;color:#6b7280}
+  #body{display:flex;gap:12px;padding:12px;min-height:0}
+  #film{width:150px;flex:none;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
+  .thumb{position:relative;cursor:pointer;border:2px solid transparent;border-radius:4px}
+  .thumb.on{border-color:#2563eb}
+  .thumb .n{position:absolute;left:-1px;top:-1px;background:#374151;color:#fff;font-size:11px;padding:1px 5px;border-radius:3px;z-index:2}
+  .thumb .pic{pointer-events:none}
+  #stage{flex:1;min-width:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center}
+  #main{width:100%;max-width:960px;padding-top:26px}
+  #status{font-size:12px;color:#4b5563;margin:0 0 4px}
+  [data-key]{outline:1px dashed transparent}
+  [data-key]:hover{outline-color:#93c5fd}
+  [data-key].sel{outline:2px solid #2563eb}
+  [data-kind=text]{cursor:text;white-space:pre-wrap;word-break:break-word}
+  [data-kind=pic]{cursor:pointer}
+  .grab,.rsz{position:absolute;padding:0 8px;height:20px;line-height:20px;text-align:center;font-size:11px;white-space:nowrap;background:#2563eb;color:#fff;
+             user-select:none;z-index:5;display:none;font-weight:400;font-family:system-ui,Arial,sans-serif;text-decoration:none;font-style:normal}
+  .grab{left:0;top:-20px;border-radius:4px 4px 0 0;cursor:move}
+  .rsz{right:-1px;bottom:-1px;border-radius:4px 0 0 0;cursor:nwse-resize}
+  [data-key]:hover>.grab,[data-key].sel>.grab,[data-key]:hover>.rsz,[data-key].sel>.rsz,.dragging>.grab,.dragging>.rsz{display:block}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="tools"></div>
+  <div id="body"><div id="film"></div><div id="stage"><div id="status"></div><div id="main"></div></div></div>
+</div>
+<script>
+function send(type, data) {
+  window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: type}, data), "*");
+}
+var cfg = {}, slideEls = [], thumbs = [], cur = 0, timer = null, selected = null, savedRange = null;
+var newCount = 0, baseline = "", sentSomething = false;
+
+/* ---------- reading a text box back into paragraphs of runs ---------- */
+function rgbHex(c) {
+  var m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c || "");
+  if (!m) return /^#[0-9a-f]{6}$/i.test(c || "") ? c.slice(1).toUpperCase() : null;
+  return [m[1], m[2], m[3]].map(function (n) { return ("0" + (+n).toString(16)).slice(-2); }).join("").toUpperCase();
+}
+
+function runStyle(node, root) {
+  var st = {b: null, i: null, u: null, c: null, sz: null, f: null};
+  for (var el = node.parentNode; el && el !== root; el = el.parentNode) {
+    if (el.nodeType !== 1) continue;
+    var s = el.style, tag = el.tagName;
+    if (st.b === null) {
+      if (tag === "B" || tag === "STRONG") st.b = true;
+      else if (s.fontWeight) st.b = (s.fontWeight === "bold" || parseInt(s.fontWeight, 10) >= 600);
+    }
+    if (st.i === null) {
+      if (tag === "I" || tag === "EM") st.i = true;
+      else if (s.fontStyle) st.i = (s.fontStyle === "italic");
+    }
+    if (st.u === null) {
+      if (tag === "U") st.u = true;
+      else if (s.textDecorationLine || s.textDecoration) st.u = /underline/.test(s.textDecorationLine || s.textDecoration);
+    }
+    if (st.c === null && s.color) st.c = rgbHex(s.color);
+    if (st.sz === null && /cqw$/.test(s.fontSize || "")) st.sz = Math.round(parseFloat(s.fontSize) / 100 * cfg.slideWpt * 10) / 10;
+    if (st.f === null && s.fontFamily) st.f = s.fontFamily.split(",")[0].replace(/["']/g, "").trim();
+  }
+  return st;
+}
+
+function serialize(root) {
+  var paras = [], cur = null;
+  function newPara(a) { cur = {align: a || null, runs: []}; paras.push(cur); }
+  function walk(node, align) {
+    Array.prototype.forEach.call(node.childNodes, function (ch) {
+      if (ch.nodeType === 3) {
+        var t = ch.nodeValue.replace(/ /g, " ");
+        if (!t) return;
+        if (!cur) newPara(align);
+        cur.runs.push(Object.assign({t: t}, runStyle(ch, root)));
+      } else if (ch.nodeType === 1) {
+        if (ch.classList.contains("grab") || ch.classList.contains("rsz")) return;
+        var tag = ch.tagName;
+        if (tag === "BR") { if (!cur) newPara(align); cur = null; return; }
+        if (tag === "DIV" || tag === "P") {
+          var a = ch.style.textAlign || align;
+          newPara(a); walk(ch, a); cur = null;
+        } else walk(ch, align);
+      }
+    });
+  }
+  walk(root, null);
+  return paras;
+}
+
+function geomOf(el) {
+  return ["left", "top", "width", "height"].map(function (k) { return Math.round(parseFloat(el.style[k]) * 1000) / 1000; });
+}
+
+/* ---------- state sent to Python ---------- */
+function buildState() {
+  return {slides: slideEls.map(function (sl) {
+    var e = {src: sl.dataset.src === "" ? null : parseInt(sl.dataset.src, 10), copy: sl.dataset.copy === "1",
+             edits: {}, geom: {}, deleted: (sl._deleted || []).slice(), adds: []};
+    sl.querySelectorAll("[data-key]").forEach(function (el) {
+      var key = el.dataset.key;
+      if (el.dataset.isnew) {
+        if (el.dataset.kind === "text") e.adds.push({geom: geomOf(el), paras: serialize(el)});
+        return;
+      }
+      var g = geomOf(el);
+      if (JSON.stringify(g) !== el.dataset.oggeom) e.geom[key] = g;
+      if (el.dataset.kind === "text") {
+        var s = serialize(el);
+        if (JSON.stringify(s) !== el.dataset.og) e.edits[key] = s;
+      }
+    });
+    return e;
+  })};
+}
+
+function report() {
+  clearTimeout(timer);
+  timer = setTimeout(function () {
+    var js = JSON.stringify(buildState());
+    if (js === baseline) {
+      if (sentSomething) { send("streamlit:setComponentValue", {value: null, dataType: "json"}); sentSomething = false; }
+      return;
+    }
+    sentSomething = true;
+    send("streamlit:setComponentValue", {value: JSON.parse(js), dataType: "json"});
+  }, 600);
+}
+
+/* ---------- thumbnails, selection ---------- */
+function refreshThumb(i) {
+  var t = thumbs[i];
+  if (!t) return;
+  var holder = t.querySelector(".pic");
+  holder.innerHTML = "";
+  var c = slideEls[i].cloneNode(true);
+  c.querySelectorAll("[data-key]").forEach(function (e) {
+    e.removeAttribute("contenteditable"); e.removeAttribute("data-key"); e.classList.remove("sel");
+    e.querySelectorAll(".grab,.rsz").forEach(function (g) { g.remove(); });
+  });
+  c.style.boxShadow = "none";
+  holder.appendChild(c);
+}
+
+function renderFilm() {
+  var film = document.getElementById("film");
+  film.innerHTML = "";
+  thumbs = slideEls.map(function (sl, i) {
+    var t = document.createElement("div");
+    t.className = "thumb" + (i === cur ? " on" : "");
+    t.innerHTML = "<span class='n'>" + (i + 1) + "</span><div class='pic'></div>";
+    t.addEventListener("click", function () { show(i); });
+    film.appendChild(t);
+    return t;
+  });
+  slideEls.forEach(function (_, i) { refreshThumb(i); });
+}
+
+function show(i) {
+  cur = i;
+  select(null);
+  var main = document.getElementById("main");
+  main.innerHTML = "";
+  main.appendChild(slideEls[i]);
+  thumbs.forEach(function (t, j) { t.classList.toggle("on", j === i); });
+  document.getElementById("status").textContent = "Slide " + (i + 1) + " of " + slideEls.length;
+}
+
+function select(el) {
+  if (selected) selected.classList.remove("sel");
+  selected = el;
+  if (el) el.classList.add("sel");
+}
+
+/* ---------- making a shape editable, movable and resizable ---------- */
+function drag(handle, el, slide, mode) {
+  handle.addEventListener("pointerdown", function (ev) {
+    ev.preventDefault();
+    select(el);
+    var rect = slide.getBoundingClientRect();
+    var x0 = ev.clientX, y0 = ev.clientY;
+    var l0 = parseFloat(el.style.left), t0 = parseFloat(el.style.top);
+    var w0 = parseFloat(el.style.width), h0 = parseFloat(el.style.height);
+    el.classList.add("dragging");
+    handle.setPointerCapture(ev.pointerId);
+    function move(e) {
+      var dx = (e.clientX - x0) * 100 / rect.width, dy = (e.clientY - y0) * 100 / rect.height;
+      if (mode === "move") { el.style.left = (l0 + dx).toFixed(3) + "%"; el.style.top = (t0 + dy).toFixed(3) + "%"; }
+      else { el.style.width = Math.max(3, w0 + dx).toFixed(3) + "%"; el.style.height = Math.max(2, h0 + dy).toFixed(3) + "%"; }
+    }
+    function up() {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      el.classList.remove("dragging");
+      refreshThumb(cur); report();
+    }
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  });
+}
+
+function setupShape(el, slide) {
+  el.querySelectorAll(".grab,.rsz").forEach(function (g) { g.remove(); });
+  if (!el.dataset.og && !el.dataset.isnew) {
+    el.dataset.oggeom = JSON.stringify(geomOf(el));
+    if (el.dataset.kind === "text") el.dataset.og = JSON.stringify(serialize(el));
+    else el.dataset.og = "pic";
+  }
+  if (el.dataset.kind === "text") {
+    el.setAttribute("contenteditable", "true");
+    el.setAttribute("spellcheck", "false");
+    el.addEventListener("input", function () { refreshThumb(cur); report(); });
+    el.addEventListener("paste", function (e) {
+      e.preventDefault();
+      var t = (e.clipboardData || window.clipboardData).getData("text/plain");
+      document.execCommand("insertText", false, t);
+    });
+  } else {
+    el.setAttribute("tabindex", "0");
+  }
+  el.addEventListener("focus", function () { select(el); });
+  el.addEventListener("pointerdown", function () { select(el); });
+  var g = document.createElement("div"); g.className = "grab"; g.textContent = "Move"; g.contentEditable = "false"; g.title = "Drag to move";
+  var r = document.createElement("div"); r.className = "rsz"; r.textContent = "Resize"; r.contentEditable = "false"; r.title = "Drag to resize";
+  el.appendChild(g); el.appendChild(r);
+  drag(g, el, slide, "move");
+  drag(r, el, slide, "size");
+}
+
+function makeSlide(html, src, copy) {
+  var holder = document.createElement("div");
+  holder.innerHTML = html;
+  var sl = holder.firstElementChild;
+  sl.dataset.src = src === null ? "" : String(src);
+  sl.dataset.copy = copy ? "1" : "0";
+  sl._deleted = [];
+  sl.querySelectorAll("[data-kind]").forEach(function (el) { setupShape(el, sl); });
+  return sl;
+}
+
+/* ---------- toolbar actions ---------- */
+function afterChange() { refreshThumb(cur); report(); }
+
+function addSlide() {
+  var sl = makeSlide(cfg.blank, null, false);
+  slideEls.splice(cur + 1, 0, sl);
+  cur = cur + 1; renderFilm(); show(cur); report();
+}
+
+function dupSlide() {
+  var src = slideEls[cur];
+  var sl = src.cloneNode(true);
+  sl._deleted = (src._deleted || []).slice();
+  sl.dataset.copy = src.dataset.src === "" ? "0" : "1";
+  sl.querySelectorAll("[data-kind]").forEach(function (el) { setupShape(el, sl); });
+  slideEls.splice(cur + 1, 0, sl);
+  cur = cur + 1; renderFilm(); show(cur); report();
+}
+
+function delSlide() {
+  if (slideEls.length < 2) { alert("A presentation needs at least one slide."); return; }
+  slideEls.splice(cur, 1);
+  cur = Math.min(cur, slideEls.length - 1); renderFilm(); show(cur); report();
+}
+
+function moveSlide(d) {
+  var j = cur + d;
+  if (j < 0 || j >= slideEls.length) return;
+  var t = slideEls[cur]; slideEls[cur] = slideEls[j]; slideEls[j] = t;
+  cur = j; renderFilm(); show(cur); report();
+}
+
+function addText() {
+  var sl = slideEls[cur];
+  var cq = (24 / cfg.slideWpt * 100).toFixed(3);
+  var el = document.createElement("div");
+  el.dataset.key = "n" + (++newCount); el.dataset.kind = "text"; el.dataset.isnew = "1";
+  el.style.cssText = "position:absolute;left:10%;top:10%;width:45%;height:14%;font-size:" + cq + "cqw;line-height:1.2;color:#222;font-family:Calibri,Arial,sans-serif";
+  el.innerHTML = "<div><span style=\"font-size:" + cq + "cqw\">New text</span></div>";
+  sl.appendChild(el);
+  setupShape(el, sl);
+  select(el); el.focus();
+  var r = document.createRange(); r.selectNodeContents(el);
+  var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  afterChange();
+}
+
+function delShape() {
+  if (!selected) { alert("Click a text box or picture first."); return; }
+  var sl = slideEls[cur];
+  if (!selected.dataset.isnew) sl._deleted.push(selected.dataset.key);
+  selected.remove(); selected = null; afterChange();
+}
+
+function withSel(fn) {
+  if (!selected || selected.dataset.kind !== "text") { alert("Click inside a text box first."); return; }
+  selected.focus();
+  var sel = window.getSelection();
+  if (savedRange && selected.contains(savedRange.commonAncestorContainer) && !savedRange.collapsed) {
+    sel.removeAllRanges(); sel.addRange(savedRange);
+  } else {
+    var r = document.createRange(); r.selectNodeContents(selected);       // nothing selected: use the whole box
+    sel.removeAllRanges(); sel.addRange(r);
+  }
+  fn();
+  afterChange();
+}
+function cmd(c, v, css) {
+  document.execCommand("styleWithCSS", false, css !== false);
+  document.execCommand(c, false, v);
+}
+function setSize(pt) {
+  withSel(function () {
+    cmd("fontSize", "7", false);
+    var cq = (pt / cfg.slideWpt * 100).toFixed(3) + "cqw";
+    Array.prototype.slice.call(selected.querySelectorAll("font[size='7']")).forEach(function (f) {
+      var s = document.createElement("span");
+      s.style.fontSize = cq;
+      while (f.firstChild) s.appendChild(f.firstChild);
+      s.querySelectorAll("[style*='font-size']").forEach(function (inner) { inner.style.fontSize = ""; });
+      f.parentNode.replaceChild(s, f);
+    });
+  });
+}
+
+function buildTools() {
+  var t = document.getElementById("tools");
+  function btn(label, title, fn, cls) {
+    var b = document.createElement("button");
+    b.innerHTML = label; b.title = title; if (cls) b.className = cls;
+    b.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    b.addEventListener("click", fn);
+    t.appendChild(b); return b;
+  }
+  function sep() { var s = document.createElement("span"); s.className = "sep"; t.appendChild(s); }
+  function lbl(x) { var s = document.createElement("span"); s.className = "lbl"; s.textContent = x; t.appendChild(s); }
+  lbl("Slide");
+  btn("+ New", "Add a blank slide after this one", addSlide);
+  btn("Duplicate", "Copy this slide", dupSlide);
+  btn("Up", "Move slide up", function () { moveSlide(-1); });
+  btn("Down", "Move slide down", function () { moveSlide(1); });
+  btn("Delete", "Delete this slide", delSlide, "danger");
+  sep(); lbl("Text");
+  btn("<b>B</b>", "Bold", function () { withSel(function () { cmd("bold"); }); });
+  btn("<i>I</i>", "Italic", function () { withSel(function () { cmd("italic"); }); });
+  btn("<u>U</u>", "Underline", function () { withSel(function () { cmd("underline"); }); });
+  var size = document.createElement("input"); size.type = "number"; size.min = 6; size.max = 200; size.value = 24; size.title = "Font size (pt)";
+  size.addEventListener("change", function () { setSize(parseFloat(size.value) || 24); });
+  t.appendChild(size);
+  var col = document.createElement("input"); col.type = "color"; col.value = "#222222"; col.title = "Text colour";
+  col.addEventListener("change", function () { withSel(function () { cmd("foreColor", col.value); }); });
+  t.appendChild(col);
+  btn("Left", "Align left", function () { withSel(function () { cmd("justifyLeft"); }); });
+  btn("Centre", "Centre", function () { withSel(function () { cmd("justifyCenter"); }); });
+  btn("Right", "Align right", function () { withSel(function () { cmd("justifyRight"); }); });
+  sep(); lbl("Shapes");
+  btn("+ Text box", "Add a text box to this slide", addText);
+  btn("Delete box", "Delete the selected text box or picture", delShape, "danger");
+}
+
+document.addEventListener("selectionchange", function () {
+  var s = window.getSelection();
+  if (s.rangeCount && selected && selected.contains(s.anchorNode)) savedRange = s.getRangeAt(0).cloneRange();
+});
+
+function start(args) {
+  if (cfg.started) return;
+  cfg = {started: true, blank: args.blank, slideWpt: args.slide_w_pt || 960};
+  var h = args.height || 700;
+  document.execCommand("defaultParagraphSeparator", false, "div");
+  buildTools();
+  document.getElementById("body").style.height = (h - 56) + "px";
+  document.getElementById("stage").style.maxHeight = (h - 80) + "px";
+  document.getElementById("film").style.maxHeight = (h - 80) + "px";
+  slideEls = args.slides.map(function (s) { return makeSlide(s.html, s.src, false); });
+  renderFilm();
+  show(0);
+  baseline = JSON.stringify(buildState());
+  send("streamlit:setFrameHeight", {height: h});
+}
+
+window.addEventListener("message", function (e) {
+  if (e.data && e.data.type === "streamlit:render") start(e.data.args);
+});
+send("streamlit:componentReady", {apiVersion: 1});
+</script>
+</body>
+</html>
