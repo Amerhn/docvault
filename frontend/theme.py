@@ -251,6 +251,17 @@ border:1px solid var(--dv-border) !important;border-radius:12px !important;color
 [class*="react-aria-ListBoxItem"],[class*="react-aria-ListBoxItem"] *,[role="option"],[role="option"] *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;background-color:transparent}
 [class*="react-aria-ListBoxItem"][data-focused="true"],[class*="react-aria-ListBoxItem"][data-hovered="true"],[class*="react-aria-ListBoxItem"][data-selected="true"],
 [role="option"]:hover,[role="option"][aria-selected="true"]{background-color:var(--dv-soft) !important}
+/* ---------- text boxes: one outer field, with the show/hide eye inside it in the same colours ---------- */
+[data-testid="stTextInputRootElement"]{background:var(--dv-surface) !important;background-color:var(--dv-surface) !important;
+border:1px solid var(--dv-border) !important;border-radius:11px !important;overflow:hidden;align-items:center}
+[data-testid="stTextInputRootElement"]:focus-within{border-color:var(--dv-accent) !important;box-shadow:0 0 0 3px var(--dv-soft) !important}
+.stApp [data-testid="stTextInputRootElement"] input,.stApp [data-testid="stTextInputRootElement"] input:focus{background:transparent !important;
+background-color:transparent !important;border:none !important;box-shadow:none !important;border-radius:0 !important;outline:none !important}
+[data-testid="stTextInputRootElement"] button,[data-testid="stTextInputRootElement"]>div{background:transparent !important;background-color:transparent !important}
+[data-testid="stTextInputRootElement"] button{color:var(--dv-muted) !important;border:none !important;box-shadow:none !important}
+[data-testid="stTextInputRootElement"] button:hover{color:var(--dv-text) !important}
+[data-testid="stTextInputRootElement"] button *,[data-testid="stTextInputRootElement"] [data-testid="stIconMaterial"]{color:inherit !important;
+-webkit-text-fill-color:currentColor !important;fill:currentColor !important}
 /* ---------- spacing fixes found in the interface review ---------- */
 /* message boxes: Streamlit pulls their text up with a negative margin; drop it so the text sits in the middle */
 [data-testid="stAlert"] [data-testid="stMarkdownContainer"]{margin:0 !important}
