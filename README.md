@@ -53,6 +53,21 @@ re-upload. **Upload > Create a new blank document** makes a new Word, Excel, Pow
 - **PDF, video, audio**: view only. If someone saves a newer version while you edit, you are warned before you overwrite it.
 - Not supported: live co-editing, and bold/italic toolbars (these need an office server such as ONLYOFFICE).
 
+### Folders
+On **Files**, open **New folder** to make a folder (inside the folder you are in). Click a folder to open it; the buttons above the
+list take you back up. **Upload** has a **Folder** box that starts in the folder you were looking at. A folder is part of the
+storage key (`u3/Design/Logo.png`), so a file stays where it was uploaded; re-sync restores the folder from the key. Only an
+empty folder can be deleted. Files and folders cannot be moved or renamed.
+
+### Comparing two versions
+Open a file with two or more versions and press **Compare versions**. Text, code, Word, PowerPoint and PDF files are compared
+line by line (changed words are marked), Excel files cell by cell, pictures pixel by pixel (changes shown in red); other files by
+size and checksum. Nothing is changed by comparing.
+
+### Staying logged in
+The login token is also kept in a browser cookie (`dv_token`), so refreshing the page does not log you out. It ends when the
+token expires (`TOKEN_HOURS`, default 8) or when you press **Log out**.
+
 ### Teams, in short
 - **Owner** (whoever creates the team): creates **invite links** (shown once, valid 7 days, can be cancelled), approves
   or declines **join requests**, makes other owners, removes members, edits the team, and runs **re-sync**.
@@ -187,10 +202,10 @@ exist. If the record fails after the upload, run a re-sync.
 ## 5. Known limits
 
 - Platform-wide administration was removed: each team is managed by its owners.
-- No comparison of two versions, no folders, no mobile app.
+- No mobile app. Files and folders cannot be moved or renamed. Comparison shows text, cells and pixels, not formatting.
 - Every version is stored in full, so storage grows with each version.
 - Governance-mode Object Lock can be bypassed by an AWS user who has the special permission.
 - Files are read into memory on upload (limit `MAX_UPLOAD_MB`, default 200 MB).
-- A browser refresh logs you out (the login lives in the page session).
+- The login cookie can be read by scripts of the page; use HTTPS (the cookie is then marked Secure).
 - Sessions already open stay valid after a password change until they expire (`TOKEN_HOURS`).
 - Run behind HTTPS before using it outside a network you trust.

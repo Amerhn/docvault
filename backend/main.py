@@ -86,6 +86,11 @@ class RoleIn(BaseModel):
     role: str
 
 
+class FolderIn(BaseModel):
+    path: str
+    team_id: Optional[int] = None
+
+
 class RollbackIn(BaseModel):
     version_id: int
     message: Optional[str] = None
@@ -289,10 +294,32 @@ def create_app(settings: Optional[Settings] = None, storage=None, mailer=None) -
     # ---------------------------------------------------------------- files (team_id empty = your private space)
     @app.post("/upload")
     def upload(file: UploadFile = File(...), message: str = Form(...), team_id: Optional[int] = Form(None),
+               folder: str = Form(""),
                user: dict = Depends(current_user), svc: VersionService = Depends(versions_service)):
         limit = settings.max_upload_mb * 1024 * 1024
         data = file.file.read(limit + 1)
-        return svc.upload(user, file.filename, data, message, team_id)
+        return svc.upload(user, file.filename, data, message, team_id, folder)
+
+    @app.get("/folders")
+    def list_folders(team_id: Optional[int] = None, user: dict = Depends(current_user),
+                     svc: VersionService = Depends(versions_service)):
+        return svc.list_folders(user, team_id)
+
+    @app.post("/folders")
+    def create_folder(body: FolderIn, user: dict = Depends(current_user), svc: VersionService = Depends(versions_service)):
+        return svc.create_folder(user, body.path, body.team_id)
+
+    @app.delete("/folders")
+    def delete_folder(path: str, team_id: Optional[int] = None, user: dict = Depends(current_user),
+                      svc: VersionService = Depends(versions_service)):
+        svc.delete_folder(user, path, team_id)
+        return {"ok": True}
+
+    @app.get("/files/{file_id}/compare")
+    def compare(file_id: int, a: int, b: int, user: dict = Depends(current_user),
+                conn=Depends(get_conn), svc: VersionService = Depends(versions_service)):
+        services.file_access(conn, user["user_id"], file_id)
+        return svc.compare(file_id, a, b)
 
     @app.get("/files")
     def files(team_id: Optional[int] = None, user: dict = Depends(current_user),

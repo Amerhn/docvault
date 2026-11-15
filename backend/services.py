@@ -424,6 +424,27 @@ def file_access(conn: sqlite3.Connection, user_id: int, file_id: int):
 
 
 _KEY_RE = re.compile(r"^([ut])(\d+)/(.+)$")
+MAX_FOLDER_DEPTH = 6
+MAX_COMPARE_BYTES = 50 * 1024 * 1024
+
+
+def clean_folder(path: Optional[str]) -> str:
+    """'Design/ Logos' -> 'Design/Logos'. Empty means the top level. Raises AppError for a bad name."""
+    parts = [p.strip() for p in (path or "").replace("\\", "/").split("/")]
+    parts = [p for p in parts if p]
+    if len(parts) > MAX_FOLDER_DEPTH:
+        raise AppError("Folders can be at most %d levels deep." % MAX_FOLDER_DEPTH)
+    for p in parts:
+        if re.search(r"[\x00-\x1f]", p) or p in (".", ".."):
+            raise AppError("That folder name is not allowed.")
+        if len(p) > 60:
+            raise AppError("A folder name can have 60 characters at most.")
+    return "/".join(parts)
+
+
+def _ancestors(path: str) -> List[str]:
+    parts = path.split("/") if path else []
+    return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
 
 
 # ------------------------------------------------------------------ VersionService
@@ -476,7 +497,7 @@ class VersionService:
             if not rows:
                 continue
             last = rows[-1]
-            out.append({"file_id": f["file_id"], "file_name": f["file_name"], "version_count": len(rows),
+            out.append({"file_id": f["file_id"], "file_name": f["file_name"], "folder": f["folder"], "version_count": len(rows),
                         "last_modified": last["uploaded_at"], "last_author": last["author"],
                         "size_bytes": last["size_bytes"], "last_message": last["commit_message"]})
         out.sort(key=lambda x: x["last_modified"], reverse=True)
@@ -486,7 +507,7 @@ class VersionService:
         where, args = self._scope_sql(team_id, owner_id)
         rows = self.conn.execute(
             "SELECT v.version_id, v.uploaded_at, v.size_bytes, v.commit_message, v.is_rollback, "
-            "f.file_name, u.username AS author, COALESCE(u.display_name, u.username) AS author_name "
+            "f.file_name, f.folder, u.username AS author, COALESCE(u.display_name, u.username) AS author_name "
             "FROM versions v JOIN files f ON f.file_id = v.file_id JOIN users u ON u.user_id = v.uploaded_by "
             "WHERE 1 = 1" + where + " ORDER BY v.uploaded_at DESC, v.version_id DESC LIMIT ?", args + [limit]).fetchall()
         return [dict(r) | {"is_rollback": bool(r["is_rollback"])} for r in rows]
@@ -501,10 +522,62 @@ class VersionService:
             (file_id, s3_version_id, user_id, uploaded_at or utcnow(), size, message, int(is_rollback), source_version_id))
         return cur.lastrowid
 
-    def upload(self, user: dict, filename: str, data: bytes, message: str, team_id: Optional[int] = None) -> dict:
+    # ---- folders (a folder is part of the storage key, so a file stays in the folder it was uploaded to)
+    @staticmethod
+    def _scope(user_id: int, team_id: Optional[int]) -> str:
+        return ("t%d" % team_id) if team_id is not None else ("u%d" % user_id)
+
+    def list_folders(self, user: dict, team_id: Optional[int] = None) -> List[dict]:
+        """Every folder in a workspace with the number of files inside it (and in the folders below it)."""
+        require_workspace(self.conn, user["user_id"], team_id)
+        scope = self._scope(user["user_id"], team_id)
+        counts: Dict[str, int] = {}
+        for r in self.conn.execute("SELECT folder, COUNT(*) AS n FROM files f WHERE " +
+                                   ("f.team_id = ?" if team_id is not None else "f.team_id IS NULL AND f.created_by = ?") +
+                                   " AND folder != '' GROUP BY folder", (team_id if team_id is not None else user["user_id"],)):
+            for a in _ancestors(r["folder"]):
+                counts[a] = counts.get(a, 0) + r["n"]
+        explicit = [r["path"] for r in self.conn.execute("SELECT path FROM folders WHERE scope = ?", (scope,))]
+        for p in explicit:
+            for a in _ancestors(p):
+                counts.setdefault(a, 0)
+        return [{"path": p, "name": p.rsplit("/", 1)[-1], "parent": p.rsplit("/", 1)[0] if "/" in p else "",
+                 "file_count": counts[p]} for p in sorted(counts, key=str.lower)]
+
+    def create_folder(self, user: dict, path: str, team_id: Optional[int] = None) -> dict:
+        require_workspace(self.conn, user["user_id"], team_id)
+        path = clean_folder(path)
+        if not path:
+            raise AppError("Enter a folder name.")
+        scope = self._scope(user["user_id"], team_id)
+        with self.conn:
+            for p in _ancestors(path):
+                self.conn.execute("INSERT OR IGNORE INTO folders (scope, path, created_by, created_at) VALUES (?, ?, ?, ?)",
+                                  (scope, p, user["user_id"], utcnow()))
+        return {"path": path}
+
+    def delete_folder(self, user: dict, path: str, team_id: Optional[int] = None) -> None:
+        """Only an empty folder can be removed; files and their versions are never deleted."""
+        require_workspace(self.conn, user["user_id"], team_id)
+        path = clean_folder(path)
+        scope = self._scope(user["user_id"], team_id)
+        if self.conn.execute("SELECT 1 FROM folders WHERE scope = ? AND path = ?", (scope, path)).fetchone() is None:
+            raise AppError("Folder not found.", 404)
+        like = path.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "/%"
+        owner = team_id if team_id is not None else user["user_id"]
+        scope_sql = "f.team_id = ?" if team_id is not None else "f.team_id IS NULL AND f.created_by = ?"
+        if self.conn.execute("SELECT 1 FROM files f WHERE " + scope_sql + " AND (f.folder = ? OR f.folder LIKE ? ESCAPE '\\') LIMIT 1",
+                             (owner, path, like)).fetchone():
+            raise AppError("This folder has files in it. Only an empty folder can be removed.")
+        with self.conn:
+            self.conn.execute("DELETE FROM folders WHERE scope = ? AND (path = ? OR path LIKE ? ESCAPE '\\')", (scope, path, like))
+
+    def upload(self, user: dict, filename: str, data: bytes, message: str, team_id: Optional[int] = None,
+               folder: Optional[str] = None) -> dict:
         name = clean_filename(filename)
         require_workspace(self.conn, user["user_id"], team_id)
-        key = ("t%d/%s" % (team_id, name)) if team_id is not None else ("u%d/%s" % (user["user_id"], name))
+        folder = clean_folder(folder)
+        key = self._scope(user["user_id"], team_id) + "/" + (folder + "/" if folder else "") + name
         message = clean_message(message)
         if len(data) == 0:
             raise AppError("The file is empty.")
@@ -520,8 +593,8 @@ class VersionService:
                 row = self.conn.execute("SELECT file_id FROM files WHERE s3_key = ?", (key,)).fetchone()
                 if row is None:
                     cur = self.conn.execute(
-                        "INSERT INTO files (file_name, s3_key, created_by, created_at, team_id) VALUES (?, ?, ?, ?, ?)",
-                        (name, key, user["user_id"], utcnow(), team_id))
+                        "INSERT INTO files (file_name, s3_key, created_by, created_at, team_id, folder) VALUES (?, ?, ?, ?, ?, ?)",
+                        (name, key, user["user_id"], utcnow(), team_id, folder))
                     file_id = cur.lastrowid
                 else:
                     file_id = row["file_id"]
@@ -580,6 +653,28 @@ class VersionService:
         except StorageError as exc:
             raise AppError(str(exc), 502)
 
+    def compare(self, file_id: int, a_id: int, b_id: int) -> dict:
+        """How version b differs from version a of one file."""
+        from . import compare as cmp
+        fa, va = self.get_version(file_id, a_id)
+        _, vb = self.get_version(file_id, b_id)
+        if a_id == b_id:
+            raise AppError("Choose two different versions to compare.")
+        for v in (va, vb):
+            if (v["size_bytes"] or 0) > MAX_COMPARE_BYTES:
+                raise AppError("A version larger than %d MB cannot be compared." % (MAX_COMPARE_BYTES // 1024 // 1024), 413)
+        numbered = {v["version_id"]: v for v in self.list_versions(file_id)}
+        try:
+            data_a = self.storage.read_version(fa["s3_key"], va["s3_version_id"])
+            data_b = self.storage.read_version(fa["s3_key"], vb["s3_version_id"])
+        except StorageError as exc:
+            raise AppError(str(exc), 502)
+
+        def info(vid):
+            v = numbered[vid]
+            return {k: v[k] for k in ("version_id", "version_no", "author", "uploaded_at", "commit_message", "size_bytes")}
+        return {"file_name": fa["file_name"], "a": info(a_id), "b": info(b_id), **cmp.compare_files(fa["file_name"], data_a, data_b)}
+
     # ---- maintenance
     def resync(self, admin: dict, team_id: Optional[int] = None, owner_id: Optional[int] = None) -> Dict[str, int]:
         """Rebuild missing version records from what storage holds.
@@ -619,9 +714,10 @@ class VersionService:
             when = v["last_modified"].isoformat(timespec="milliseconds").replace("+00:00", "Z")
             with self.conn:
                 f = self.conn.execute("SELECT file_id FROM files WHERE s3_key = ?", (v["key"],)).fetchone()
+                folder, _, short = fname.rpartition("/")          # the key holds the folder: u3/Design/Logo.png
                 file_id = f["file_id"] if f else self.conn.execute(
-                    "INSERT INTO files (file_name, s3_key, created_by, created_at, team_id) VALUES (?, ?, ?, ?, ?)",
-                    (fname, v["key"], author_id, when, ident if kind == "t" else None)).lastrowid
+                    "INSERT INTO files (file_name, s3_key, created_by, created_at, team_id, folder) VALUES (?, ?, ?, ?, ?, ?)",
+                    (short, v["key"], author_id, when, ident if kind == "t" else None, folder)).lastrowid
                 source_id = None
                 if meta.get("rollback-of"):
                     src = self.conn.execute("SELECT version_id FROM versions WHERE file_id = ? AND s3_version_id = ?",

@@ -25,7 +25,16 @@ CREATE TABLE IF NOT EXISTS files (
     s3_key     TEXT NOT NULL UNIQUE,
     created_by INTEGER NOT NULL REFERENCES users(user_id),
     created_at TEXT NOT NULL,
-    team_id    INTEGER REFERENCES teams(team_id)
+    team_id    INTEGER REFERENCES teams(team_id),
+    folder     TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS folders (
+    folder_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope      TEXT NOT NULL,
+    path       TEXT NOT NULL,
+    created_by INTEGER NOT NULL REFERENCES users(user_id),
+    created_at TEXT NOT NULL,
+    UNIQUE (scope, path)
 );
 CREATE TABLE IF NOT EXISTS versions (
     version_id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,6 +152,8 @@ def init_db(conn: sqlite3.Connection) -> None:
     fcols = {r["name"] for r in conn.execute("PRAGMA table_info(files)")}
     if "team_id" not in fcols:
         conn.execute("ALTER TABLE files ADD COLUMN team_id INTEGER REFERENCES teams(team_id)")
+    if "folder" not in fcols:
+        conn.execute("ALTER TABLE files ADD COLUMN folder TEXT NOT NULL DEFAULT ''")
     # themes that no longer exist (for example the very first coloured ones) fall back to the default theme
     conn.execute("UPDATE users SET theme = 'light' WHERE theme NOT IN ('light', 'dark', 'paper', 'silver', 'graphite', 'sky', 'mint', 'violet', 'amber', 'blush', 'indigo', 'aurora')")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL")

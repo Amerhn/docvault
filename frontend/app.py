@@ -9,8 +9,12 @@ from datetime import datetime
 from html import escape
 from zoneinfo import ZoneInfo
 
+import json
+import time
+
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 import editors
 import embedded
@@ -82,10 +86,62 @@ def problem(resp: requests.Response) -> str:
         return "Something went wrong (%s)." % resp.status_code
 
 
+COOKIE = "dv_token"
+
+
+def token_seconds_left(token: str) -> int:
+    """Seconds until a login token expires (read from the token itself; the server checks the signature)."""
+    try:
+        body = token.split(".")[0]
+        exp = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))["exp"]
+        return max(int(exp - time.time()), 0)
+    except (ValueError, KeyError, TypeError, IndexError):
+        return 0
+
+
+def cookie_script(token: str = None):
+    """Keep the login in a browser cookie, so a refresh does not log you out. token=None removes the cookie."""
+    age = token_seconds_left(token) if token else 0
+    value = token if token and age else ""
+    components.html("""<script>(function(){var p=window.parent,secure=p.location.protocol==='https:'?'; Secure':'';
+    p.document.cookie='%s=%s; path=/; max-age=%d; SameSite=Lax'+secure;})();</script>""" % (COOKIE, value, age), height=0)
+
+
+def restore_login():
+    """After a refresh Streamlit starts a new session. If the browser still holds a valid login cookie, sign in again."""
+    if S.get("cookie_checked"):
+        return
+    S["cookie_checked"] = True
+    try:
+        token = st.context.cookies.get(COOKIE)
+    except Exception:
+        token = None
+    if not token:
+        return
+    try:
+        resp = requests.get(API + "/me", headers={"Authorization": "Bearer " + token}, timeout=30)
+    except requests.RequestException:
+        return
+    if not resp.ok:                                   # expired, or the account was disabled: forget it
+        S["clear_cookie"] = True
+        return
+    S["token"] = token
+    S["user"] = resp.json()
+    S["page"] = "files"
+    S.pop("theme_picked_value", None)
+    if "theme" in st.query_params:
+        del st.query_params["theme"]
+    if not S["user"].get("must_change_password"):
+        load_session()
+        accept_pending_invite()
+
+
 def logout(message: str = None):
     theme = S.get("theme", DEFAULT_THEME)
     S.clear()
     S["theme"] = theme
+    S["cookie_checked"] = True            # the browser still reports the old cookie until it is reloaded
+    S["clear_cookie"] = True
     if message:
         S["flash"] = message
     st.rerun()
@@ -95,6 +151,8 @@ def goto(page: str):
     S["page"] = page
     S.pop("open_file", None)
     S.pop("manage_team", None)
+    if page == "files":
+        S["folder"] = ""
 
 
 def switch_workspace(team_id):
@@ -102,6 +160,7 @@ def switch_workspace(team_id):
     S["team_id"] = team_id
     S["ws_select"] = next((t["name"] for t in S["teams"] if t["team_id"] == team_id), "My files")
     S["page"] = "files"
+    S["folder"] = ""
     S.pop("open_file", None)
 
 
@@ -160,6 +219,8 @@ def complete_login(data: dict):
     if not data["user"].get("must_change_password"):
         load_session()
         accept_pending_invite()
+    if "theme" in st.query_params:                         # the choice is saved to the account now; the address can be clean
+        del st.query_params["theme"]
     st.rerun()
 
 
@@ -370,6 +431,7 @@ def topbar():
         wanted = next((t["team_id"] for t in S["teams"] if t["name"] == choice), None)
         if wanted != S["team_id"]:
             S["team_id"] = wanted
+            S["folder"] = ""
             S.pop("open_file", None)
             st.rerun()
         with cols[6]:
@@ -396,6 +458,25 @@ def close_file():
     S.pop("edit_mode", None)
 
 
+def enter_folder(path: str):
+    S["folder"] = path
+
+
+def join_path(base: str, name: str) -> str:
+    return "/".join(p for p in (base, name.strip()) if p)
+
+
+def folder_crumbs(cur: str):
+    """'All files / Design / Logos' as buttons: click one to go back up to it."""
+    parts = cur.split("/") if cur else []
+    cols = st.columns([1.1] * (len(parts) + 1) + [max(8 - 1.1 * (len(parts) + 1), 1)], vertical_alignment="center")
+    cols[0].button("All files", key="crumb_root", on_click=enter_folder, args=("",), use_container_width=True, disabled=not cur)
+    for i, name in enumerate(parts):
+        path = "/".join(parts[:i + 1])
+        cols[i + 1].button(name, key="crumb_%d" % i, on_click=enter_folder, args=(path,), use_container_width=True,
+                           disabled=(i == len(parts) - 1))
+
+
 def files_page():
     if S.get("open_file"):
         return timeline_view(S["open_file"])
@@ -404,22 +485,70 @@ def files_page():
     st.caption(team["description"] or "%d member%s" % (team["member_count"], "" if team["member_count"] == 1 else "s")
                if team else "Only you can see the files in this space.")
     r = api("GET", "/files", params=ws_params())
-    if not r.ok:
-        st.error(problem(r))
+    fr = api("GET", "/folders", params=ws_params())
+    if not r.ok or not fr.ok:
+        st.error(problem(r if not r.ok else fr))
         return
-    files = r.json()
-    if not files:
-        st.info("Nothing here yet. Add the first file from the **Upload** tab.")
-        return
+    files, folders = r.json(), fr.json()
+    known = {x["path"] for x in folders}
+    cur = S.get("folder", "")
+    if cur and cur not in known:                      # the folder was removed meanwhile
+        cur = S["folder"] = ""
+    if not files and not folders:
+        st.info("Nothing here yet. Add the first file from the **Upload** tab, or make a folder.")
     q = st.text_input("Search", placeholder="Search files by name", label_visibility="collapsed", key="file_q").strip().lower()
-    shown = [f for f in files if q in f["file_name"].lower()]
-    if not shown:
-        st.caption("No file matches \u201c%s\u201d." % escape(q))
+    if not q:
+        folder_crumbs(cur)
+    with st.expander("New folder"):
+        with st.form("new_folder_form", clear_on_submit=True, border=False):
+            fname = st.text_input("Folder name", max_chars=60, placeholder="e.g. Designs",
+                                  help="It is created %s." % ("inside %s" % cur.replace("/", " / ") if cur else "at the top level"))
+            made = st.form_submit_button("Create folder")
+        if made:
+            if not fname.strip():
+                st.error("Enter a folder name.")
+            else:
+                body = {"path": join_path(cur, fname)}
+                body.update(ws_params())
+                rr = api("POST", "/folders", json=body)
+                if rr.ok:
+                    S["flash"] = "Folder created."
+                    st.rerun()
+                else:
+                    st.error(problem(rr))
+    if q:                                              # a search looks in every folder
+        shown_folders = []
+        shown = [f for f in files if q in f["file_name"].lower()]
+        if not shown:
+            st.caption("No file matches \u201c%s\u201d." % escape(q))
+    else:
+        shown_folders = [x for x in folders if x["parent"] == cur]
+        shown = [f for f in files if f["folder"] == cur]
+        if not shown and not shown_folders and (files or folders):
+            st.caption("This folder is empty.")
+    for i, fo in enumerate(shown_folders):
+        with st.container(key="card_folder_%d" % i):
+            c1, c2, c3, c4 = st.columns([5, 2.1, 1.1, 1.1], vertical_alignment="center")
+            c1.markdown("<div class='dv-file'><div class='dv-ico'><span style='font-size:.75rem;font-weight:700;letter-spacing:.04em'>DIR</span></div><div><b>%s</b></div></div>"
+                        % escape(fo["name"]), unsafe_allow_html=True)
+            c2.markdown("<div class='dv-muted'>%d file%s</div>" % (fo["file_count"], "" if fo["file_count"] == 1 else "s"),
+                        unsafe_allow_html=True)
+            c4.button("Open", key="fo_open_%d" % i, on_click=enter_folder, args=(fo["path"],), use_container_width=True)
+            if fo["file_count"] == 0 and c3.button("Delete", key="fo_del_%d" % i, use_container_width=True):
+                params = {"path": fo["path"]}
+                params.update(ws_params())
+                dr = api("DELETE", "/folders", params=params)
+                if dr.ok:
+                    S["flash"] = "Folder removed."
+                    st.rerun()
+                else:
+                    st.error(problem(dr))
     for f in shown:
         with st.container(key="card_file_%d" % f["file_id"]):
             c1, c2, c3 = st.columns([5, 3.2, 1.1], vertical_alignment="center")
-            c1.markdown("<div class='dv-file'><div class='dv-ico'><span style='font-size:.75rem;font-weight:700;letter-spacing:.04em'>%s</span></div><div><b>%s</b><div class='dv-muted'>%s</div></div></div>"
-                        % (file_icon(f["file_name"]), escape(f["file_name"]), escape(f["last_message"])), unsafe_allow_html=True)
+            where = "<div class='dv-muted'>in %s</div>" % escape(f["folder"].replace("/", " / ")) if q and f["folder"] else ""
+            c1.markdown("<div class='dv-file'><div class='dv-ico'><span style='font-size:.75rem;font-weight:700;letter-spacing:.04em'>%s</span></div><div><b>%s</b>%s<div class='dv-muted'>%s</div></div></div>"
+                        % (file_icon(f["file_name"]), escape(f["file_name"]), where, escape(f["last_message"])), unsafe_allow_html=True)
             c2.markdown("<div class='dv-muted'>%d version%s \u00B7 %s<br>%s \u00B7 %s</div>" % (
                 f["version_count"], "" if f["version_count"] == 1 else "s", escape(f["last_author"]),
                 fmt_time(f["last_modified"]), fmt_size(f["size_bytes"])), unsafe_allow_html=True)
@@ -482,7 +611,7 @@ def editor_page(em: dict):
         elif not force:
             st.error("Tick \u201cSave my version anyway\u201d, or go back and reopen the newest version.")
         else:
-            form = {"message": msg}
+            form = {"message": msg, "folder": f.get("folder", "")}
             if S["team_id"] is not None:
                 form["team_id"] = str(S["team_id"])
             resp = api("POST", "/upload", files={"file": (name, new_data)}, data=form)
@@ -498,23 +627,125 @@ def editor_page(em: dict):
         st.rerun()
 
 
+def _seg_html(segs, text: str) -> str:
+    if not segs:
+        return escape(text) or "&nbsp;"
+    return "".join("<mark>%s</mark>" % escape(t) if changed else escape(t) for t, changed in segs) or "&nbsp;"
+
+
+def diff_table(rows: list, head_a: str, head_b: str) -> str:
+    """The side-by-side table of a comparison: the older version on the left, the newer one on the right."""
+    labelled = any("label" in r for r in rows)
+    out = ['<table class="dv-diff%s"><tr class="head"><td class="n"></td><td class="c">%s</td><td class="n"></td><td class="c">%s</td></tr>'
+           % (" lbl" if labelled else "", escape(head_a), escape(head_b))]
+    for r in rows:
+        if r["tag"] == "skip":
+            out.append('<tr class="skip"><td colspan="4">%d unchanged line%s</td></tr>' % (r["count"], "" if r["count"] == 1 else "s"))
+            continue
+        na = r.get("label") or r.get("a_no") or ""
+        nb = r.get("label") or r.get("b_no") or ""
+        out.append('<tr class="%s"><td class="n">%s</td><td class="c a">%s</td><td class="n">%s</td><td class="c b">%s</td></tr>' % (
+            r["tag"], na, _seg_html(r.get("a_seg"), r["a"]) if r["a"] != "" else "&nbsp;",
+            nb, _seg_html(r.get("b_seg"), r["b"]) if r["b"] != "" else "&nbsp;"))
+    out.append("</table>")
+    return "".join(out)
+
+
+def compare_panel(f: dict, versions: list):
+    ids = [v["version_id"] for v in versions]
+    by_id = {v["version_id"]: v for v in versions}
+
+    def label(i):
+        v = by_id[i]
+        return "Version %d — %s (%s)" % (v["version_no"], v["commit_message"][:40], v["author"])
+    with st.container(key="card_compare"):
+        st.markdown("**Compare two versions**")
+        c1, c2 = st.columns(2)
+        a = c1.selectbox("From (older)", ids, index=len(ids) - 2, format_func=label, key="cmp_a_%d" % f["file_id"])
+        b = c2.selectbox("To (newer)", ids, index=len(ids) - 1, format_func=label, key="cmp_b_%d" % f["file_id"])
+        if a == b:
+            st.info("Choose two different versions.")
+            return
+        if by_id[a]["version_no"] > by_id[b]["version_no"]:
+            a, b = b, a
+        cache = S.get("cmp_cache")
+        if not cache or cache[0] != (f["file_id"], a, b):
+            resp = api("GET", "/files/%d/compare" % f["file_id"], params={"a": a, "b": b})
+            if not resp.ok:
+                st.error(problem(resp))
+                return
+            cache = S["cmp_cache"] = ((f["file_id"], a, b), resp.json())
+        render_compare(f, cache[1])
+
+
+def render_compare(f: dict, r: dict):
+    va, vb = r["a"], r["b"]
+    head_a, head_b = "Version %d · %s" % (va["version_no"], fmt_time(va["uploaded_at"])), \
+        "Version %d · %s" % (vb["version_no"], fmt_time(vb["uploaded_at"]))
+    if r["identical"]:
+        st.success("Version %d and version %d have exactly the same content." % (va["version_no"], vb["version_no"]))
+        return
+    kind = r["kind"]
+    st.markdown("<div class='dv-muted'>Size: %s → %s</div>" % (fmt_size(r["size_a"]), fmt_size(r["size_b"])), unsafe_allow_html=True)
+    if kind == "image":
+        if not r["same_dimensions"]:
+            st.warning("The pictures have different dimensions (%d × %d and %d × %d pixels), so they cannot be compared pixel by pixel."
+                       % (tuple(r["dims_a"]) + tuple(r["dims_b"])))
+        else:
+            st.markdown("<span class='dv-stat chg'>%s%% of the picture changed</span>" % r["changed_percent"], unsafe_allow_html=True)
+        cols = st.columns(3 if r.get("diff_image") else 2)
+        for col, v, title in ((cols[0], va, "Version %d" % va["version_no"]), (cols[1], vb, "Version %d" % vb["version_no"])):
+            data = api("GET", "/files/%d/content/%d" % (f["file_id"], v["version_id"]))
+            if data.ok:
+                col.image(data.content, caption=title, use_container_width=True)
+        if r.get("diff_image"):
+            cols[2].image(base64.b64decode(r["diff_image"]), caption="Changes in red", use_container_width=True)
+        return
+    if kind == "binary":
+        st.info("This kind of file cannot be compared line by line. The two versions are different.")
+        st.markdown("<span class='dv-stat'>Checksum (SHA-256) of version %d: %s</span><br><span class='dv-stat'>Checksum (SHA-256) of version %d: %s</span>" % (
+            va["version_no"], r["sha_a"][:16], vb["version_no"], r["sha_b"][:16]), unsafe_allow_html=True)
+        if r.get("first_difference") is not None:
+            st.caption("The files first differ at byte %d." % r["first_difference"])
+        return
+    s = r["stats"]
+    unit = "cell" if kind == "sheet" else "line"
+    st.markdown("<span class='dv-stat add'>%d %s%s added</span><span class='dv-stat del'>%d removed</span><span class='dv-stat chg'>%d changed</span>" % (
+        s["added"], unit, "" if s["added"] == 1 else "s", s["removed"], s["changed"]), unsafe_allow_html=True)
+    if not r["rows"]:
+        st.info("The text is the same. Only formatting or other parts of the file differ.")
+        return
+    st.markdown(diff_table(r["rows"], head_a, head_b), unsafe_allow_html=True)
+    if r["truncated"]:
+        st.caption("Only the first part of a long comparison is shown.")
+
+
 def timeline_view(f: dict):
     if S.get("edit_mode") and S["edit_mode"]["file"]["file_id"] == f["file_id"]:
         return editor_page(S["edit_mode"])
     st.button("\u2190 Back to files", key="back_files", on_click=close_file)
     st.markdown("<div class='dv-h'>%s</div>" % escape(f["file_name"]), unsafe_allow_html=True)
-    st.caption("Time Machine \u2014 every version, who made it, and why.")
+    where = ("in %s \u00b7 " % f["folder"].replace("/", " / ")) if f.get("folder") else ""
+    st.caption("%sTime Machine \u2014 every version, who made it, and why." % where)
     r = api("GET", "/files/%d/versions" % f["file_id"])
     if not r.ok:
         st.error(problem(r))
         return
     versions = r.json()
+    b1, b2, _ = st.columns([1.3, 1.5, 4], gap="small")
     if versions and (editors.can_edit(f["file_name"]) or editors.can_view(f["file_name"])):
         cur = versions[-1]
         label = "Edit in browser" if editors.can_edit(f["file_name"]) else "View"
-        if st.button(label, key="edit_btn", type="primary"):
+        if b1.button(label, key="edit_btn", type="primary", use_container_width=True):
             start_editing(f, cur["version_id"], not editors.can_edit(f["file_name"]))
             st.rerun()
+    comparing = S.get("cmp_open") == f["file_id"]
+    if len(versions) >= 2 and b2.button("Hide comparison" if comparing else "Compare versions", key="cmp_btn",
+                                         use_container_width=True):
+        S["cmp_open"] = None if comparing else f["file_id"]
+        st.rerun()
+    if len(versions) >= 2 and comparing:
+        compare_panel(f, versions)
     for v in reversed(versions):                      # newest first
         with st.container(key="card_ver_%d" % v["version_id"]):
             left, right = st.columns([4.2, 1.8], vertical_alignment="center")
@@ -568,7 +799,17 @@ def timeline_view(f: dict):
 # ----------------------------------------------------------------- upload
 def upload_page():
     st.markdown("<div class='dv-h'>Upload</div>", unsafe_allow_html=True)
-    st.caption("Uploading to **%s**. A file with a name that already exists there gets a **new version**." % ws_name())
+    fr = api("GET", "/folders", params=ws_params())
+    paths = [x["path"] for x in fr.json()] if fr.ok else []
+    top = "(Top level)"
+    label_of = {p: p.replace("/", " / ") for p in paths}
+    if S.get("up_folder_for") != (S["team_id"], S.get("folder", "")) or S.get("up_folder") not in [top] + list(label_of.values()):
+        S["up_folder"] = label_of.get(S.get("folder", ""), top)       # start in the folder you were looking at
+        S["up_folder_for"] = (S["team_id"], S.get("folder", ""))
+    chosen = st.selectbox("Folder", [top] + list(label_of.values()), key="up_folder")
+    folder = next((p for p, l in label_of.items() if l == chosen), "")
+    st.caption("Uploading to **%s**%s. A file with a name that already exists in the same folder gets a **new version**." % (
+        ws_name(), (" / " + escape(chosen)) if folder else ""))
     with st.expander("Create a new blank document"):
         n1, n2 = st.columns([2, 3])
         new_type = n1.selectbox("Type", list(editors.NEW_TYPES), key="new_type")
@@ -580,7 +821,7 @@ def upload_page():
                 st.error("Enter a file name.")
             else:
                 fname = base if base.lower().endswith("." + ext) else "%s.%s" % (base, ext)
-                form = {"message": "Create %s" % fname}
+                form = {"message": "Create %s" % fname, "folder": folder}
                 if S["team_id"] is not None:
                     form["team_id"] = str(S["team_id"])
                 resp = api("POST", "/upload", files={"file": (fname, editors.blank_file(ext))}, data=form)
@@ -588,7 +829,7 @@ def upload_page():
                     fid = resp.json()["file_id"]
                     vers = resp.json()["versions"]
                     S["page"] = "files"
-                    open_file({"file_id": fid, "file_name": fname})
+                    open_file({"file_id": fid, "file_name": fname, "folder": folder})
                     start_editing(S["open_file"], vers[-1]["version_id"], False)
                     st.rerun()
                 else:
@@ -602,7 +843,7 @@ def upload_page():
         elif not message.strip():
             st.error("Enter a commit message.")
         else:
-            data = {"message": message}
+            data = {"message": message, "folder": folder}
             if S["team_id"] is not None:
                 data["team_id"] = str(S["team_id"])
             resp = api("POST", "/upload", files={"file": (up.name, up.getvalue())}, data=data)
@@ -882,6 +1123,7 @@ PAGES = {"files": files_page, "upload": upload_page, "teams": teams_page, "profi
 def app_screen():
     if S["user"].get("must_change_password"):
         inject_theme()
+        cookie_script(S["token"])
         _, mid, _ = st.columns([1, 1.25, 1])
         with mid:
             st.markdown(brand_html(), unsafe_allow_html=True)
@@ -891,6 +1133,7 @@ def app_screen():
                 change_password_form(forced=True)
         return
     inject_theme()
+    cookie_script(S["token"])
     flash()
     topbar()
     with st.container(key="page_" + S["page"]):
@@ -899,6 +1142,10 @@ def app_screen():
 
 # ----------------------------------------------------------------- main
 if "token" not in S:
+    restore_login()
+if "token" not in S:
+    if S.pop("clear_cookie", None):
+        cookie_script(None)
     auth_screen()
 else:
     app_screen()

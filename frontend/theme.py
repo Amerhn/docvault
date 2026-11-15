@@ -149,6 +149,22 @@ box-shadow:var(--dv-shadow);transition:transform .22s ease,box-shadow .22s ease,
 .stApp .dv-badge{display:inline-block;padding:.12rem .6rem;border-radius:999px;font-size:.78rem;font-weight:700;background:var(--dv-soft);
 color:var(--dv-accent) !important;margin-left:.4rem}
 .stApp .dv-badge-now{background:var(--dv-accent);color:var(--dv-on) !important}
+.stApp .dv-diff{width:100%%;border-collapse:collapse;table-layout:fixed;font-family:ui-monospace,Consolas,monospace;font-size:.85rem;
+border:1px solid var(--dv-border);border-radius:10px;overflow:hidden}
+.stApp .dv-diff td{padding:.18rem .55rem;vertical-align:top;white-space:pre-wrap;word-break:break-word;color:var(--dv-text) !important;
+border-top:1px solid var(--dv-border);background:var(--dv-surface)}
+.stApp .dv-diff td.n{width:3.2rem;text-align:right;color:var(--dv-muted) !important;user-select:none;background:var(--dv-soft)}
+.stApp .dv-diff td.c{width:calc(50%% - 3.2rem)}
+.stApp .dv-diff tr.add td.c.b,.stApp .dv-diff tr.chg td.c.b{background:rgba(46,160,67,.18)}
+.stApp .dv-diff tr.del td.c.a,.stApp .dv-diff tr.chg td.c.a{background:rgba(229,62,62,.18)}
+.stApp .dv-diff mark{background:rgba(229,62,62,.38);color:var(--dv-text) !important;border-radius:3px;padding:0 1px}
+.stApp .dv-diff td.b mark{background:rgba(46,160,67,.42)}
+.stApp .dv-diff tr.skip td{text-align:center;color:var(--dv-muted) !important;background:var(--dv-soft);font-family:inherit;font-style:italic}
+.stApp .dv-diff tr.head td{font-weight:700;background:var(--dv-soft);font-family:inherit}
+.stApp .dv-stat{display:inline-block;padding:.15rem .7rem;margin:0 .45rem .5rem 0;border-radius:999px;font-weight:700;font-size:.85rem;
+background:var(--dv-soft);color:var(--dv-text) !important}
+.stApp .dv-stat.add{background:rgba(46,160,67,.22)}.stApp .dv-stat.del{background:rgba(229,62,62,.22)}.stApp .dv-stat.chg{background:rgba(240,170,30,.25)}
+.stApp .dv-crumbs{margin:.2rem 0 .6rem}
 .dv-or{text-align:center;color:var(--dv-muted);margin:.5rem 0;font-size:.9rem}
 .dv-avatar-lg{width:112px;height:112px;border-radius:50%%;display:flex;align-items:center;justify-content:center;color:var(--dv-on) !important;
 font-size:2.4rem;font-weight:800;background:var(--dv-accent);box-shadow:0 8px 22px %(hover)s;animation:dv-pop .5s ease both}
@@ -262,6 +278,14 @@ background-color:transparent !important;border:none !important;box-shadow:none !
 [data-testid="stTextInputRootElement"] button:hover{color:var(--dv-text) !important}
 [data-testid="stTextInputRootElement"] button *,[data-testid="stTextInputRootElement"] [data-testid="stIconMaterial"]{color:inherit !important;
 -webkit-text-fill-color:currentColor !important;fill:currentColor !important}
+/* the second button of a form, and an expander bar while it is open or hovered, keep the theme's colours */
+[data-testid="stBaseButton-secondaryFormSubmit"]{background:var(--dv-surface) !important;background-color:var(--dv-surface) !important;
+border:1px solid var(--dv-border) !important}
+[data-testid="stBaseButton-secondaryFormSubmit"]:hover{border-color:var(--dv-accent) !important}
+[data-testid="stExpander"] details,[data-testid="stExpander"] details>summary,[data-testid="stExpander"] details[open]>summary,
+[data-testid="stExpander"] summary:hover,[data-testid="stExpander"] summary:focus,[data-testid="stExpander"] summary:active{
+background:var(--dv-surface) !important;background-color:var(--dv-surface) !important;color:var(--dv-text) !important}
+[data-testid="stExpander"] summary *{color:var(--dv-text) !important}
 /* ---------- sign-in screens ---------- */
 .dv-brand{margin:.4rem 0 1.3rem !important}
 .st-key-card_auth h3{margin-bottom:1.1rem !important}
