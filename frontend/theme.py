@@ -282,6 +282,9 @@ font-size:15px !important;font-weight:600 !important;line-height:1.3 !important}
 /* tabs, expanders, inputs, alerts, code */
 .stApp [role="tab"],.stApp [role="tab"] p{font-size:16px !important;font-weight:600 !important}
 [data-testid="stExpander"] summary,[data-testid="stExpander"] summary p{font-size:16px !important;font-weight:600 !important}
+/* keep the arrow and the title on one centre line (no paragraph spacing inside the bar) */
+[data-testid="stExpander"] summary{align-items:center !important;min-height:46px}
+[data-testid="stExpander"] summary p,[data-testid="stExpander"] summary [data-testid="stMarkdownContainer"]{margin:0 !important;padding:0 !important;line-height:1.3 !important}
 .stApp input,.stApp textarea{font-size:16px !important;line-height:1.45}
 .stApp input::placeholder,.stApp textarea::placeholder{font-size:15px}
 [data-testid="stAlert"] p,[data-testid="stAlert"] *{font-size:15.5px;line-height:1.5}
