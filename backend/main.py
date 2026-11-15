@@ -4,6 +4,7 @@ Run:  uvicorn backend.main:create_app --factory --reload
 Docs: http://localhost:8000/docs
 """
 import logging
+from contextlib import asynccontextmanager
 from typing import Optional
 from urllib.parse import quote
 
@@ -111,13 +112,19 @@ def create_app(settings: Optional[Settings] = None, storage=None, mailer=None) -
         log.warning("Created the first account '%s'.", settings.admin_username)
     boot.close()
 
-    app = FastAPI(title="DocVault", version="2.0")
+    backup = dbsync.Backup(settings, storage) if dbsync.enabled(settings, storage) else None
 
-    if dbsync.enabled(settings, storage):
-        backup = dbsync.Backup(settings, storage)
+    @asynccontextmanager
+    async def lifespan(_app):
+        yield
+        if backup is not None:                        # one last backup when the server stops
+            backup.stop()
+
+    app = FastAPI(title="DocVault", version="2.0", lifespan=lifespan)
+
+    if backup is not None:
         backup.run_once()
         backup.start()
-        app.add_event_handler("shutdown", backup.stop)
 
     @app.exception_handler(AppError)
     async def app_error_handler(request, exc: AppError):
