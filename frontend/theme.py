@@ -249,6 +249,11 @@ border:1px solid var(--dv-border) !important;border-radius:12px !important;color
 [class*="react-aria-ListBoxItem"],[class*="react-aria-ListBoxItem"] *,[role="option"],[role="option"] *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;background-color:transparent}
 [class*="react-aria-ListBoxItem"][data-focused="true"],[class*="react-aria-ListBoxItem"][data-hovered="true"],[class*="react-aria-ListBoxItem"][data-selected="true"],
 [role="option"]:hover,[role="option"][aria-selected="true"]{background-color:var(--dv-soft) !important}
+/* the open list of a drop-down is a white panel of its own */
+[data-testid$="VirtualDropdown"],[data-testid$="VirtualDropdown"]>div,[data-testid$="VirtualDropdown"] [role="listbox"]{background:var(--dv-surface) !important;
+background-color:var(--dv-surface) !important}
+[data-testid$="VirtualDropdown"]{border:1px solid var(--dv-border) !important;border-radius:12px !important;box-shadow:0 8px 24px rgba(0,0,0,.25) !important}
+[data-testid$="VirtualDropdown"] [role="option"]{border-radius:8px}
 /* tabs in newer Streamlit are plain role="tab" elements */
 .stApp [role="tablist"]{border-color:var(--dv-border) !important}
 .stApp [role="tab"]{color:var(--dv-muted) !important;border-bottom-color:transparent !important;background:transparent !important}
