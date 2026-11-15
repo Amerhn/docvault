@@ -251,6 +251,16 @@ border:1px solid var(--dv-border) !important;border-radius:12px !important;color
 [class*="react-aria-ListBoxItem"],[class*="react-aria-ListBoxItem"] *,[role="option"],[role="option"] *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;background-color:transparent}
 [class*="react-aria-ListBoxItem"][data-focused="true"],[class*="react-aria-ListBoxItem"][data-hovered="true"],[class*="react-aria-ListBoxItem"][data-selected="true"],
 [role="option"]:hover,[role="option"][aria-selected="true"]{background-color:var(--dv-soft) !important}
+/* ---------- spacing fixes found in the interface review ---------- */
+/* message boxes: Streamlit pulls their text up with a negative margin; drop it so the text sits in the middle */
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"]{margin:0 !important}
+[data-testid="stAlertContainer"]{padding:14px 18px !important;display:flex !important;align-items:center !important}
+.stApp [data-testid="stCaptionContainer"]{margin-bottom:.7rem !important}
+.stApp [data-testid="stHeadingActionElements"]{display:none !important}
+.stApp h3,.stApp h4{padding-top:0 !important;padding-bottom:0 !important}
+.dv-h{margin-bottom:.5rem !important}
+.st-key-edit_btn{margin:.6rem 0 1.1rem}
+.stApp [data-testid="stForm"] [data-testid="stCaptionContainer"]{margin-bottom:.9rem !important}
 /* ---------- typography: one scale for the whole app ----------
    title 30 / section 22 / sub-section 19 / body 16 / secondary 14 / small 12.5 */
 .stApp{line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
@@ -258,6 +268,12 @@ border:1px solid var(--dv-border) !important;border-radius:12px !important;color
 .stApp h3{font-size:22px !important;font-weight:650 !important;line-height:1.25 !important;letter-spacing:-.005em;margin:0 0 .5rem !important}
 .stApp h4{font-size:19px !important;font-weight:650 !important;line-height:1.3 !important;margin:1.3rem 0 .35rem !important}
 .stApp [data-testid="stMarkdownContainer"] p{line-height:1.55;margin-bottom:.5rem}
+/* text inside controls must not carry paragraph spacing, or it sits off-centre */
+.stApp button p,.stApp summary p,.stApp a p,.stApp [role="tab"] p,.stApp [data-testid="stWidgetLabel"] p,.stApp [data-testid="stCaptionContainer"] p,
+.stApp [data-testid="stAlert"] p,.stApp [data-testid="stFormSubmitButton"] p,.stApp [data-testid="stFileUploaderDropzone"] p,
+.stApp [data-testid="stPopoverBody"] p,.stApp [data-testid="stExpander"] summary p{margin:0 !important}
+.stApp button p{line-height:1.3 !important;display:block !important}
+.stApp button [data-testid="stMarkdownContainer"]{line-height:1.3 !important;display:flex !important;align-items:center;justify-content:center}
 /* field labels: a little bolder and fully dark so they read first */
 .stApp [data-testid="stWidgetLabel"] p,.stApp [data-testid="stWidgetLabel"] label{font-size:15px !important;font-weight:600 !important;color:var(--dv-text) !important}
 /* helper and caption text: clearly secondary, but never faint */
@@ -274,8 +290,8 @@ color:color-mix(in srgb,var(--dv-muted) 72%%,var(--dv-text)) !important}
 font-size:15px !important;font-weight:600 !important;line-height:1.3 !important}
 .stApp [data-testid="stBaseButton-primary"] p,.stApp [data-testid="stBaseButton-primaryFormSubmit"] p{font-weight:650 !important}
 /* top navigation: bold, with the current page darker and underlined by the bar */
-[class*="st-key-navoff_"] button p,[class*="st-key-navon_"] button p{font-size:16px !important;font-weight:650 !important}
-[class*="st-key-navoff_"] button p{color:color-mix(in srgb,var(--dv-muted) 60%%,var(--dv-text)) !important}
+.stApp [class*="st-key-navoff_"] button p,.stApp [class*="st-key-navon_"] button p{font-size:16px !important;font-weight:650 !important}
+.stApp [class*="st-key-navoff_"] button p{color:color-mix(in srgb,var(--dv-muted) 60%%,var(--dv-text)) !important}
 /* links: always underlined so they look clickable */
 .stApp [data-testid="stMarkdownContainer"] a{text-decoration:underline !important;text-underline-offset:3px;text-decoration-thickness:1.5px;font-weight:600;color:var(--dv-accent) !important}
 [class*="st-key-linkrow"] button p{font-size:14.5px !important;font-weight:650 !important;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}

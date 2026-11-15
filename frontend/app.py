@@ -451,7 +451,7 @@ def editor_page(em: dict):
         st.warning("Someone saved a newer version (version %d by %s) while you were editing. Saving now adds your "
                    "edit on top of it, and their changes will not be in your file." % (latest["version_no"], latest["author"]))
         force = st.checkbox("Save my version anyway", key=key + "_force")
-    c1, c2, _ = st.columns([1.4, 1, 3])
+    c1, c2, _ = st.columns([1.5, 0.9, 3.6], gap="small")
     if c1.button("Save as new version", type="primary", key=key + "_save"):
         if new_data is None:
             st.error("You have not changed anything yet.")
