@@ -12,12 +12,15 @@ import urllib.request
 
 _lock = threading.Lock()
 _started = False
-PORT = int(os.environ.get("DOCVAULT_EMBED_PORT", "8765"))
+
+
+def _port() -> int:
+    return int(os.environ.get("DOCVAULT_EMBED_PORT", "8765"))
 
 
 def _healthy() -> bool:
     try:
-        urllib.request.urlopen("http://127.0.0.1:%d/health" % PORT, timeout=1)
+        urllib.request.urlopen("http://127.0.0.1:%d/health" % _port(), timeout=1)
         return True
     except Exception:
         return False
@@ -27,9 +30,12 @@ def start_if_enabled() -> None:
     global _started
     if os.environ.get("DOCVAULT_EMBED") != "1":
         return
+    PORT = _port()
     os.environ["DOCVAULT_API"] = "http://127.0.0.1:%d" % PORT
     with _lock:
-        if _started or _healthy():
+        if _started and _healthy():
+            return
+        if _healthy():
             _started = True
             return
         root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

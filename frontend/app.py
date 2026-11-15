@@ -328,6 +328,10 @@ def forgot_view():
         st.button("Back to log in", key="fp_back", on_click=set_view, args=("login",))
 
 
+# ----------------------------------------------------------------- top bar
+NAV = (("files", "Files"), ("upload", "Upload"), ("teams", "Teams"))
+
+
 def topbar():
     prof = S["profile"]
     with st.container(key="topbar"):
