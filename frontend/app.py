@@ -25,6 +25,11 @@ st.set_page_config(page_title="DocVault", layout="wide", initial_sidebar_state="
 S = st.session_state
 for _k, _v in (("auth_view", "login"), ("page", "files"), ("team_id", None), ("theme", DEFAULT_THEME), ("teams", [])):
     S.setdefault(_k, _v)
+if not S.get("token") and "theme_init" not in S:          # ?theme=aurora in the address opens the sign-in screen in that theme
+    S["theme_init"] = True
+    if st.query_params.get("theme") in THEMES:
+        S["theme"] = st.query_params["theme"]
+        S["theme_picked_value"] = S["theme"]              # counts as your choice: it is saved to the account at login
 
 
 # ----------------------------------------------------------------- helpers
@@ -125,6 +130,10 @@ def load_session():
     r = api("GET", "/me")
     if r.ok:
         S["profile"] = r.json()
+        picked = S.pop("theme_picked_value", None)          # a theme chosen on the sign-in screen wins and is saved
+        if picked in THEMES and picked != S["profile"]["theme"]:
+            if api("PATCH", "/me", json={"theme": picked}).ok:
+                S["profile"]["theme"] = picked
         S["theme"] = S["profile"]["theme"]
         S["avatar_uri"] = None
         S["avatar_raw"] = None
@@ -197,13 +206,26 @@ def auth_screen():
     if token:
         S["invite_token"] = token
         st.query_params.clear()
-    _, mid, _ = st.columns([1, 1.25, 1])
+    _, picker = st.columns([3, 1.5])
+    with picker:                          # themes are available before you log in
+        st.selectbox("Theme", list(THEMES), index=list(THEMES).index(S["theme"]) if S["theme"] in THEMES else 0,
+                     key="auth_theme_select", format_func=lambda k: THEMES[k]["label"], on_change=pick_auth_theme)
+    _, mid, _ = st.columns([0.8, 1.6, 0.8])
     with mid:
         st.markdown(brand_html(), unsafe_allow_html=True)
         if S.get("invite_token"):
             st.info("You were invited to join a team. Log in or create an account, and you will be added automatically.")
         with st.container(key="card_auth"):
             {"login": login_view, "signup": signup_view, "verify": verify_view, "forgot": forgot_view}[S["auth_view"]]()
+
+
+def pick_auth_theme():
+    """Theme chosen on a sign-in screen: show it now, keep it in the address (survives a refresh), and save it to the
+    account after login."""
+    key = S["auth_theme_select"]
+    S["theme"] = key
+    S["theme_picked_value"] = key
+    st.query_params["theme"] = key
 
 
 def set_view(view: str):

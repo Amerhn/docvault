@@ -262,6 +262,12 @@ background-color:transparent !important;border:none !important;box-shadow:none !
 [data-testid="stTextInputRootElement"] button:hover{color:var(--dv-text) !important}
 [data-testid="stTextInputRootElement"] button *,[data-testid="stTextInputRootElement"] [data-testid="stIconMaterial"]{color:inherit !important;
 -webkit-text-fill-color:currentColor !important;fill:currentColor !important}
+/* ---------- sign-in screens ---------- */
+.dv-brand{margin:.4rem 0 1.3rem !important}
+.st-key-card_auth h3{margin-bottom:1.1rem !important}
+.st-key-card_auth [data-testid="stWidgetLabel"]{margin-bottom:.15rem}
+.st-key-card_auth .stButton,.st-key-card_auth [data-testid="stFormSubmitButton"]{margin-top:.35rem}
+.st-key-card_auth .dv-or{margin:1rem 0 .6rem}
 /* ---------- spacing fixes found in the interface review ---------- */
 /* message boxes: Streamlit pulls their text up with a negative margin; drop it so the text sits in the middle */
 [data-testid="stAlert"] [data-testid="stMarkdownContainer"]{margin:0 !important}
