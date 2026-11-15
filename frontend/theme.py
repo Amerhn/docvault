@@ -83,8 +83,8 @@ html{font-size:18px !important}
 html,body,.stApp,.stApp p,.stApp li,.stApp label,.stApp a,.stApp h1,.stApp h2,.stApp h3,.stApp h4,.stApp button,.stApp input,.stApp textarea,
 .stApp [data-baseweb="select"] div,.stApp [data-baseweb="tab"],.stApp [data-testid="stMarkdownContainer"],.stApp [data-testid="stCaptionContainer"],
 [data-baseweb="popover"] li,[data-testid="stPopoverBody"] *:not([data-testid="stIconMaterial"]){font-family:%(font)s !important}
-.stApp p,.stApp li,.stApp label,.stApp input,.stApp textarea{font-size:1.06rem}
-.stApp [data-testid="stCaptionContainer"] *{font-size:.95rem !important}
+.stApp p,.stApp li,.stApp label,.stApp input,.stApp textarea{font-size:16px}
+.stApp [data-testid="stCaptionContainer"] *{font-size:14px !important}
 .dv-ico,.stButton button p,[data-testid="stPopoverBody"] p{filter:grayscale(1)}
 header[data-testid="stHeader"],#MainMenu,footer,[data-testid="stToolbar"],[data-testid="stDecoration"]{display:none !important}
 .block-container{max-width:1120px !important;padding:0 1.2rem 3rem !important}
@@ -139,7 +139,7 @@ border-radius:14px !important;animation:dv-pop .22s ease both}
 
 /* ---------- pages, cards ---------- */
 [class*="st-key-page_"]{animation:dv-fade-up .5s ease both}
-.dv-h{font-weight:800;font-size:1.9rem;margin:.2rem 0 .1rem}
+.dv-h{font-weight:700;font-size:30px;line-height:1.2;letter-spacing:-.01em;margin:.2rem 0 .25rem}
 [class*="st-key-card"]{background:var(--dv-surface);border:1px solid var(--dv-border);border-radius:16px;padding:1rem 1.2rem;margin-bottom:.8rem;
 box-shadow:var(--dv-shadow);transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;animation:dv-pop .4s ease both}
 [class*="st-key-card"]:hover{transform:translateY(-3px);border-color:var(--dv-accent);box-shadow:0 10px 26px %(hover)s}
@@ -202,7 +202,7 @@ transition:border-color .25s,background .25s,transform .25s}
 [data-testid="stFileUploaderDropzone"]:hover{border-color:var(--dv-accent) !important;background:var(--dv-soft) !important;transform:scale(1.005)}
 [data-testid="stFileUploaderDropzone"] *{color:var(--dv-text) !important}
 /* Streamlit's own "Limit 200MB per file" line is replaced by a plain "Maximum file size" note under the box */
-[data-testid="stFileUploaderDropzoneInstructions"] small{display:none !important}
+[data-testid="stFileUploaderDropzoneInstructions"]{display:none !important}
 [data-testid="stExpander"]{background:var(--dv-surface);border:1px solid var(--dv-border) !important;border-radius:14px !important}
 [data-testid="stExpander"] summary:hover{color:var(--dv-accent)}
 button[data-baseweb="tab"]{transition:color .2s,background .2s}
@@ -251,6 +251,42 @@ border:1px solid var(--dv-border) !important;border-radius:12px !important;color
 [class*="react-aria-ListBoxItem"],[class*="react-aria-ListBoxItem"] *,[role="option"],[role="option"] *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;background-color:transparent}
 [class*="react-aria-ListBoxItem"][data-focused="true"],[class*="react-aria-ListBoxItem"][data-hovered="true"],[class*="react-aria-ListBoxItem"][data-selected="true"],
 [role="option"]:hover,[role="option"][aria-selected="true"]{background-color:var(--dv-soft) !important}
+/* ---------- typography: one scale for the whole app ----------
+   title 30 / section 22 / sub-section 19 / body 16 / secondary 14 / small 12.5 */
+.stApp{line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.stApp h1,.stApp h2{font-size:30px !important;font-weight:700 !important;line-height:1.2 !important;letter-spacing:-.01em;margin:0 0 .4rem !important}
+.stApp h3{font-size:22px !important;font-weight:650 !important;line-height:1.25 !important;letter-spacing:-.005em;margin:0 0 .5rem !important}
+.stApp h4{font-size:19px !important;font-weight:650 !important;line-height:1.3 !important;margin:1.3rem 0 .35rem !important}
+.stApp [data-testid="stMarkdownContainer"] p{line-height:1.55;margin-bottom:.5rem}
+/* field labels: a little bolder and fully dark so they read first */
+.stApp [data-testid="stWidgetLabel"] p,.stApp [data-testid="stWidgetLabel"] label{font-size:15px !important;font-weight:600 !important;color:var(--dv-text) !important}
+/* helper and caption text: clearly secondary, but never faint */
+.stApp [data-testid="stCaptionContainer"],.stApp [data-testid="stCaptionContainer"] *{opacity:1 !important;line-height:1.5;
+color:color-mix(in srgb,var(--dv-muted) 72%%,var(--dv-text)) !important}
+.stApp .dv-muted{font-size:14px;line-height:1.45;color:color-mix(in srgb,var(--dv-muted) 72%%,var(--dv-text)) !important}
+.dv-file b{font-size:17px;font-weight:650}
+.dv-file .dv-muted{font-size:14px}
+.dv-tag{font-size:16px;color:color-mix(in srgb,var(--dv-muted) 72%%,var(--dv-text))}
+.dv-or{font-size:14px}
+.stApp .dv-badge{font-size:12px;font-weight:700;letter-spacing:.02em;padding:.15rem .6rem}
+/* buttons: one size, one weight */
+.stApp .stButton button p,.stApp .stDownloadButton button p,.stApp .stLinkButton a p,.stApp [data-testid="stFormSubmitButton"] button p{
+font-size:15px !important;font-weight:600 !important;line-height:1.3 !important}
+.stApp [data-testid="stBaseButton-primary"] p,.stApp [data-testid="stBaseButton-primaryFormSubmit"] p{font-weight:650 !important}
+/* top navigation: bold, with the current page darker and underlined by the bar */
+[class*="st-key-navoff_"] button p,[class*="st-key-navon_"] button p{font-size:16px !important;font-weight:650 !important}
+[class*="st-key-navoff_"] button p{color:color-mix(in srgb,var(--dv-muted) 60%%,var(--dv-text)) !important}
+/* links: always underlined so they look clickable */
+.stApp [data-testid="stMarkdownContainer"] a{text-decoration:underline !important;text-underline-offset:3px;text-decoration-thickness:1.5px;font-weight:600;color:var(--dv-accent) !important}
+[class*="st-key-linkrow"] button p{font-size:14.5px !important;font-weight:650 !important;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}
+/* tabs, expanders, inputs, alerts, code */
+.stApp [role="tab"],.stApp [role="tab"] p{font-size:16px !important;font-weight:600 !important}
+[data-testid="stExpander"] summary,[data-testid="stExpander"] summary p{font-size:16px !important;font-weight:600 !important}
+.stApp input,.stApp textarea{font-size:16px !important;line-height:1.45}
+.stApp input::placeholder,.stApp textarea::placeholder{font-size:15px}
+[data-testid="stAlert"] p,[data-testid="stAlert"] *{font-size:15.5px;line-height:1.5}
+code,[data-testid="stCode"] code{font-size:14px !important}
+[data-baseweb="select"] *,[data-testid="stSelectbox"] input{font-size:15.5px !important}
 /* the open list of a drop-down is a white panel of its own */
 [data-testid$="VirtualDropdown"],[data-testid$="VirtualDropdown"]>div,[data-testid$="VirtualDropdown"] [role="listbox"]{background:var(--dv-surface) !important;
 background-color:var(--dv-surface) !important}

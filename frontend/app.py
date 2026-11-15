@@ -572,7 +572,7 @@ def upload_page():
                 else:
                     st.error(problem(resp))
     up = st.file_uploader("Choose a file", key="up_file")
-    st.caption("Maximum file size: %d MB." % int(os.environ.get("MAX_UPLOAD_MB", "200")))
+    st.caption("Drag a file onto the box or press Upload. Maximum file size: %d MB." % int(os.environ.get("MAX_UPLOAD_MB", "200")))
     message = st.text_area("Commit message (required)", max_chars=500, placeholder="What did you change, and why?", key="up_msg")
     if st.button("Upload", type="primary", key="up_btn"):
         if up is None:
