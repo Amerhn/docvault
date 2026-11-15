@@ -207,9 +207,60 @@ button[data-baseweb="tab"]{transition:color .2s,background .2s}
 button[data-baseweb="tab"][aria-selected="true"] p{color:var(--dv-accent) !important}
 [data-baseweb="tab-highlight"]{background:var(--dv-accent) !important;height:3px !important;border-radius:3px}
 [data-testid="stForm"]{border:none !important;padding:0 !important}
-[data-testid="stAlert"]{border-radius:12px;animation:dv-pop .3s ease both;background:var(--dv-surface) !important;border:1px solid var(--dv-border) !important}
-[data-testid="stAlert"] *{color:var(--dv-text) !important}
-code,[data-testid="stCode"] pre{border-radius:10px !important}
+/* message boxes (info, success, warning, error): Streamlit paints an inner layer, so colour every layer */
+[data-testid="stAlert"],[data-testid="stAlertContainer"],[data-testid="stAlert"] [data-baseweb="notification"],[data-testid="stAlert"]>div,
+[data-testid="stNotification"],[data-testid="stNotificationContent"]{background:var(--dv-surface) !important;background-color:var(--dv-surface) !important;
+border-radius:12px !important;box-shadow:none !important}
+[data-testid="stAlert"]{animation:dv-pop .3s ease both;border:1px solid var(--dv-border) !important}
+[data-testid="stAlert"] *,[data-testid="stAlertContainer"] *,[data-testid="stNotification"] *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important}
+[data-testid="stAlert"] svg,[data-testid="stAlertContainer"] svg{fill:var(--dv-accent) !important;color:var(--dv-accent) !important}
+/* code blocks (for example the team invite link) and inline code */
+[data-testid="stCode"],[data-testid="stCodeBlock"],.stCodeBlock{background:var(--dv-surface) !important;background-color:var(--dv-surface) !important;
+border:1px solid var(--dv-border) !important;border-radius:10px !important}
+[data-testid="stCode"] pre,[data-testid="stCode"] code,[data-testid="stCodeBlock"] pre,[data-testid="stCodeBlock"] code,.stCodeBlock pre{
+background:transparent !important;background-color:transparent !important;border-radius:10px !important}
+[data-testid="stCode"] *,[data-testid="stCodeBlock"] *,.stCodeBlock *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;
+background-color:transparent !important}
+[data-testid="stCode"] button,[data-testid="stCodeBlock"] button,[data-testid="stCodeCopyButton"]{background:var(--dv-surface) !important;border:1px solid var(--dv-border) !important;opacity:1 !important}
+[data-testid="stCode"] button svg,[data-testid="stCodeBlock"] button svg,[data-testid="stCodeCopyButton"] svg{fill:var(--dv-text) !important;color:var(--dv-text) !important}
+.stApp :not(pre)>code{background:var(--dv-soft) !important;color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;padding:.1rem .4rem;border-radius:6px}
+/* pop-up notices */
+[data-testid="stToast"],[data-testid="stToastContainer"]>div,[data-testid="stToastContainer"] [data-baseweb="toast"]{background:var(--dv-surface) !important;
+border:1px solid var(--dv-border) !important;border-radius:12px !important}
+[data-testid="stToast"] *,[data-testid="stToastContainer"] *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important}
+/* number boxes, sliders, checkboxes, radio buttons */
+[data-testid="stNumberInput"] button{background:var(--dv-surface) !important;border:1px solid var(--dv-border) !important}
+[data-testid="stNumberInput"] button svg,[data-testid="stNumberInput"] button *{fill:var(--dv-text) !important;color:var(--dv-text) !important}
+[data-testid="stNumberInput"] [data-baseweb="input"],[data-testid="stNumberInput"] [data-baseweb="base-input"]{background:var(--dv-surface) !important}
+[data-testid="stSlider"] [role="slider"]{background:var(--dv-accent) !important;border-color:var(--dv-accent) !important;box-shadow:none !important}
+[data-testid="stSlider"] [data-testid="stSliderThumbValue"]{color:var(--dv-accent) !important;background:transparent !important}
+[data-testid="stSlider"] [data-testid="stTickBarMin"],[data-testid="stSlider"] [data-testid="stTickBarMax"]{color:var(--dv-muted) !important}
+[data-baseweb="checkbox"] span,[data-baseweb="radio"] span,[data-baseweb="radio"] div,[data-testid="stCheckbox"] label,[data-testid="stRadio"] label{color:var(--dv-text) !important}
+[data-baseweb="checkbox"] input:checked+div,[data-baseweb="radio"] input:checked+div{background:var(--dv-accent) !important;border-color:var(--dv-accent) !important}
+[data-baseweb="radio"]>div:first-child,[data-baseweb="checkbox"]>div:first-child{border-color:var(--dv-border)}
+/* drop-down lists (newer Streamlit builds them from react-aria parts instead of baseweb) */
+[data-testid="stSelectbox"] [class*="react-aria-ComboBox"]>div,[data-testid="stMultiSelect"] [class*="react-aria-ComboBox"]>div,
+[data-testid="stSelectbox"] [class*="react-aria"][class*="Group"]{background:var(--dv-surface) !important;background-color:var(--dv-surface) !important;
+border:1px solid var(--dv-border) !important;border-radius:11px !important}
+[data-testid="stSelectbox"] input,[data-testid="stMultiSelect"] input{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;background:transparent !important}
+[data-testid="stSelectbox"] button svg,[data-testid="stMultiSelect"] button svg{fill:var(--dv-text) !important;color:var(--dv-text) !important}
+[class*="react-aria-Popover"],[class*="react-aria-ListBox"],[class*="react-aria-Popover"]>div{background:var(--dv-surface) !important;background-color:var(--dv-surface) !important;
+border:1px solid var(--dv-border) !important;border-radius:12px !important;color:var(--dv-text) !important}
+[class*="react-aria-ListBoxItem"],[class*="react-aria-ListBoxItem"] *,[role="option"],[role="option"] *{color:var(--dv-text) !important;-webkit-text-fill-color:var(--dv-text) !important;background-color:transparent}
+[class*="react-aria-ListBoxItem"][data-focused="true"],[class*="react-aria-ListBoxItem"][data-hovered="true"],[class*="react-aria-ListBoxItem"][data-selected="true"],
+[role="option"]:hover,[role="option"][aria-selected="true"]{background-color:var(--dv-soft) !important}
+/* tabs in newer Streamlit are plain role="tab" elements */
+.stApp [role="tablist"]{border-color:var(--dv-border) !important}
+.stApp [role="tab"]{color:var(--dv-muted) !important;border-bottom-color:transparent !important;background:transparent !important}
+.stApp [role="tab"] *{color:inherit !important}
+.stApp [role="tab"][aria-selected="true"]{color:var(--dv-accent) !important;border-bottom-color:var(--dv-accent) !important}
+.stApp [role="tab"]:hover{color:var(--dv-accent) !important}
+.stApp [class*="react-aria-SelectionIndicator"]{background:var(--dv-accent) !important;background-color:var(--dv-accent) !important}
+/* colour picker and small widgets */
+[data-testid="stColorPicker"] *{color:var(--dv-text) !important}
+[data-testid="stColorPicker"] [data-baseweb="input"]{background:var(--dv-surface) !important}
+/* tables made with st.dataframe / data_editor take Streamlit's own theme, so give their frame a visible edge */
+[data-testid="stDataFrame"],[data-testid="stDataFrameResizable"]{border:1px solid var(--dv-border) !important;border-radius:10px !important;overflow:hidden}
 
 </style>""" % dict(
         accent=t["accent"], accent2=t["accent2"], soft=_rgba(t["accent"], 0.13 if not dark else 0.2), bg=t["bg"], surface=t["surface"],
