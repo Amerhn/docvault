@@ -201,6 +201,8 @@ border:1px solid var(--dv-border) !important;border-radius:11px !important;trans
 transition:border-color .25s,background .25s,transform .25s}
 [data-testid="stFileUploaderDropzone"]:hover{border-color:var(--dv-accent) !important;background:var(--dv-soft) !important;transform:scale(1.005)}
 [data-testid="stFileUploaderDropzone"] *{color:var(--dv-text) !important}
+/* Streamlit's own "Limit 200MB per file" line is replaced by a plain "Maximum file size" note under the box */
+[data-testid="stFileUploaderDropzoneInstructions"] small{display:none !important}
 [data-testid="stExpander"]{background:var(--dv-surface);border:1px solid var(--dv-border) !important;border-radius:14px !important}
 [data-testid="stExpander"] summary:hover{color:var(--dv-accent)}
 button[data-baseweb="tab"]{transition:color .2s,background .2s}
