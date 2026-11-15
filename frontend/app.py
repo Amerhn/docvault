@@ -486,10 +486,16 @@ def files_page():
                if team else "Only you can see the files in this space.")
     r = api("GET", "/files", params=ws_params())
     fr = api("GET", "/folders", params=ws_params())
-    if not r.ok or not fr.ok:
-        st.error(problem(r if not r.ok else fr))
+    if not r.ok:
+        st.error(problem(r))
         return
-    files, folders = r.json(), fr.json()
+    if not fr.ok and fr.status_code != 404:
+        st.error(problem(fr))
+        return
+    files = r.json()
+    folders = fr.json() if fr.ok else []          # a 404 means the backend is an older version: show the files without folders
+    if not fr.ok:
+        st.warning("The backend is an older version without folders. Restart it to use folders.")
     known = {x["path"] for x in folders}
     cur = S.get("folder", "")
     if cur and cur not in known:                      # the folder was removed meanwhile

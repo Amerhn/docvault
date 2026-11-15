@@ -165,6 +165,9 @@ border-top:1px solid var(--dv-border);background:var(--dv-surface)}
 background:var(--dv-soft);color:var(--dv-text) !important}
 .stApp .dv-stat.add{background:rgba(46,160,67,.22)}.stApp .dv-stat.del{background:rgba(229,62,62,.22)}.stApp .dv-stat.chg{background:rgba(240,170,30,.25)}
 .stApp .dv-crumbs{margin:.2rem 0 .6rem}
+[class*="st-key-card_file_"] [data-testid="stMarkdownContainer"],[class*="st-key-card_folder_"] [data-testid="stMarkdownContainer"],
+[class*="st-key-card_file_"] [data-testid="stMarkdownContainer"] p,[class*="st-key-card_folder_"] [data-testid="stMarkdownContainer"] p{margin-bottom:0 !important;padding-bottom:0 !important}
+[class*="st-key-card_file_"] [data-testid="stMarkdown"],[class*="st-key-card_folder_"] [data-testid="stMarkdown"]{margin-bottom:0 !important}
 .dv-or{text-align:center;color:var(--dv-muted);margin:.5rem 0;font-size:.9rem}
 .dv-avatar-lg{width:112px;height:112px;border-radius:50%%;display:flex;align-items:center;justify-content:center;color:var(--dv-on) !important;
 font-size:2.4rem;font-weight:800;background:var(--dv-accent);box-shadow:0 8px 22px %(hover)s;animation:dv-pop .5s ease both}
