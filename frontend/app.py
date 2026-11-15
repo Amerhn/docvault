@@ -245,12 +245,16 @@ def login_view():
 
 def signup_view():
     st.subheader("Create your account")
-    name = st.text_input("Full name", key="su_name")
-    email = st.text_input("Email address", key="su_email", placeholder="you@gmail.com")
-    pw = tinput("Password (8+ characters)", type="password", key="su_pw", autocomplete="new-password")
-    pw2 = tinput("Repeat the password", type="password", key="su_pw2", autocomplete="new-password")
-    if st.button("Create account", type="primary", use_container_width=True, key="su_btn"):
-        if pw != pw2:
+    with st.form("signup_form"):         # a form sends every box together when you click, so nothing is lost
+        name = st.text_input("Full name", key="su_name")
+        email = st.text_input("Email address", key="su_email", placeholder="you@gmail.com")
+        pw = tinput("Password (8+ characters)", type="password", key="su_pw", autocomplete="new-password")
+        pw2 = tinput("Repeat the password", type="password", key="su_pw2", autocomplete="new-password")
+        go = st.form_submit_button("Create account", type="primary", use_container_width=True)
+    if go:
+        if not name.strip() or not email.strip():
+            st.error("Enter your name and your email address.")
+        elif pw != pw2:
             st.error("The two passwords do not match.")
         else:
             r = api("POST", "/signup", json={"full_name": name, "email": email, "password": pw})
@@ -267,45 +271,52 @@ def signup_view():
 
 def verify_view():
     st.subheader("Check your email")
-    email = st.text_input("Email address", value=S.get("verify_email", ""), key="vf_email")
     st.caption("Enter the 6-digit code we sent to this address. (In demo mode the code is shown in the backend window.)")
-    code = st.text_input("Verification code", key="vf_code", max_chars=6)
-    if st.button("Verify and continue", type="primary", use_container_width=True, key="vf_btn"):
-        r = api("POST", "/verify-email", json={"email": email, "code": code})
+    with st.form("verify_form"):
+        email = st.text_input("Email address", value=S.get("verify_email", ""), key="vf_email")
+        code = st.text_input("Verification code", key="vf_code", max_chars=6)
+        go = st.form_submit_button("Verify and continue", type="primary", use_container_width=True)
+        resend = st.form_submit_button("Send a new code", use_container_width=True)
+    if go:
+        r = api("POST", "/verify-email", json={"email": email.strip(), "code": code.strip()})
         if r.ok:
             complete_login(r.json())
         else:
             st.error(problem(r))
-    c1, c2 = st.columns(2)
-    with c1, st.container(key="linkrow_resend"):
-        if st.button("Send a new code", key="vf_resend"):
-            r = api("POST", "/resend-verification", json={"email": email})
-            st.info(r.json()["detail"] if r.ok else problem(r))
-    with c2, st.container(key="linkrow_back_verify"):
+    elif resend:
+        r = api("POST", "/resend-verification", json={"email": email.strip()})
+        st.info(r.json()["detail"] if r.ok else problem(r))
+    with st.container(key="linkrow_back_verify"):
         st.button("Back to log in", key="vf_back", on_click=set_view, args=("login",))
 
 
 def forgot_view():
     st.subheader("Reset your password")
-    ident = tinput("Email or username", key="fp_ident", autocomplete="username")
-    if st.button("Send me a code", type="primary", use_container_width=True, key="fp_send"):
-        r = api("POST", "/forgot-password", json={"identifier": ident})
+    with st.form("forgot_form"):
+        ident = tinput("Email or username", key="fp_ident", autocomplete="username")
+        send = st.form_submit_button("Send me a code", type="primary", use_container_width=True)
+    if send:
+        r = api("POST", "/forgot-password", json={"identifier": ident.strip()})
         if r.ok:
             S["fp_sent"] = True
+            S["fp_who"] = ident.strip()
             st.info(r.json()["detail"])
             if r.json().get("demo"):
                 st.warning("Demo mode: no email is sent. The 6-digit code is printed in the backend window (the one running uvicorn).")
         else:
             st.error(problem(r))
     if S.get("fp_sent"):
-        code = st.text_input("6-digit code", key="fp_code", max_chars=6)
-        pw1 = tinput("New password (8+ characters)", type="password", key="fp_pw1", autocomplete="new-password")
-        pw2 = tinput("Repeat the new password", type="password", key="fp_pw2", autocomplete="new-password")
-        if st.button("Set new password", type="primary", use_container_width=True, key="fp_set"):
+        with st.form("reset_form"):
+            code = st.text_input("6-digit code", key="fp_code", max_chars=6)
+            pw1 = tinput("New password (8+ characters)", type="password", key="fp_pw1", autocomplete="new-password")
+            pw2 = tinput("Repeat the new password", type="password", key="fp_pw2", autocomplete="new-password")
+            setpw = st.form_submit_button("Set new password", type="primary", use_container_width=True)
+        if setpw:
             if pw1 != pw2:
                 st.error("The two passwords do not match.")
             else:
-                r = api("POST", "/reset-password", json={"identifier": ident, "code": code, "new_password": pw1})
+                r = api("POST", "/reset-password", json={"identifier": S.get("fp_who", ident), "code": code.strip(),
+                                                         "new_password": pw1})
                 if r.ok:
                     S["fp_sent"] = False
                     S["auth_view"] = "login"
@@ -315,10 +326,6 @@ def forgot_view():
                     st.error(problem(r))
     with st.container(key="linkrow_back_forgot"):
         st.button("Back to log in", key="fp_back", on_click=set_view, args=("login",))
-
-
-# ----------------------------------------------------------------- top bar
-NAV = (("files", "Files"), ("upload", "Upload"), ("teams", "Teams"))
 
 
 def topbar():
